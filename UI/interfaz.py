@@ -1,7 +1,24 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
+from datetime import datetime
+import re
 
 class InterfazApp:
+    def validar_caracter(self, valor):
+            return re.fullmatch(r"[\d\-]{0,10}", valor) is not None
+
+    def validar_fecha(self):
+        fecha = self.fecha_entrada.get()
+        try:
+            datetime.strptime(fecha, "%d-%m-%Y")
+            return True
+            #messagebox.showinfo("Fecha válida", "La fecha tiene el formato correcto.")
+        except ValueError:
+            messagebox.showerror("Error", "La fecha debe tener el formato DD-MM-AAAA y ser válida.")
+            return False
+            
+
+
     def __init__(self, root):
         self.root = root
         self.root.title("Comparador de precios - Alvear Hotel")
@@ -19,10 +36,15 @@ class InterfazApp:
         self.adultos = tk.IntVar()
         self.niños = tk.IntVar()
 
-        ttk.Label(root, text="Fecha de entrada (YYYY-MM-DD):").grid(row=0, column=0, sticky='w')
-        ttk.Entry(root, textvariable=self.fecha_entrada).grid(row=0, column=1, sticky='ew')
+        vcmd = (root.register(self.validar_caracter), '%P')
 
-        ttk.Label(root, text="Fecha de salida (YYYY-MM-DD):").grid(row=1, column=0, sticky='w')
+
+        ttk.Label(root, text="Fecha de entrada (DD-MM-AAAA):").grid(row=0, column=0, sticky='w')
+        ttk.Entry(root, textvariable=self.fecha_entrada, validate='key', validatecommand=vcmd).grid(row=0, column=1, sticky='ew')
+        ttk.Button(root, text="Validar fecha", command=self.validar_fecha).grid(row=1, column=2, sticky='e')
+       
+
+        ttk.Label(root, text="Fecha de salida (DD-MM-AAAA):").grid(row=1, column=0, sticky='w')
         ttk.Entry(root, textvariable=self.fecha_salida).grid(row=1, column=1, sticky='ew')
 
         ttk.Label(root, text="Cantidad de adultos:").grid(row=2, column=0, sticky='w')
@@ -37,6 +59,8 @@ class InterfazApp:
         self.resultado = tk.Text(root, height=15, width=80)
         self.resultado.grid(row=5, column=0, columnspan=2, sticky='nsew')
     def ejecutar(self):
+        if not self.validar_fecha():
+                return
         # Acá luego llamarás a tu crawler y a la comparación
         datos = (
             self.fecha_entrada.get(),
