@@ -1,6 +1,7 @@
 import json
 import os
 from typing import List, Set, Tuple
+from urllib.parse import urlencode
 
 from crawl4ai import (
     AsyncWebCrawler,
@@ -9,9 +10,9 @@ from crawl4ai import (
     CrawlerRunConfig,
     LLMExtractionStrategy,
 )
+from datetime import date
+from models.hotel import *
 
-from models.venue import Venue
-from utils.data_utils import is_complete_venue, is_duplicate_venue
 
 
 def get_browser_config() -> BrowserConfig:
@@ -37,141 +38,128 @@ def get_llm_strategy() -> LLMExtractionStrategy:
         LLMExtractionStrategy: The settings for how to extract data using LLM.
     """
     # https://docs.crawl4ai.com/api/strategies/#llmextractionstrategy
+   
     return LLMExtractionStrategy(
         provider="groq/deepseek-r1-distill-llama-70b",  # Name of the LLM provider
         api_token=os.getenv("GROQ_API_KEY"),  # API token for authentication
-        schema=Venue.model_json_schema(),  # JSON schema of the data model
+        schema=Habitacion.model_json_schema(),  # JSON schema of the data model
         extraction_type="schema",  # Type of extraction to perform
         instruction=(
-            "Extract all venue objects with 'name', 'location', 'price', 'capacity', "
-            "'rating', 'reviews', and a 1 sentence description of the venue from the "
-            "following content."
+        "Extrae una habitación con su nombre, su detalle, "
+        "y una lista de promociones con su titulo (ejemplo 'desayuno incluido', 'cancelación gratuita', etc.),"
+        "descripcion y precio por noche "
         ),  # Instructions for the LLM
         input_format="markdown",  # Format of the input content
         verbose=True,  # Enable verbose logging
     )
 
+def fechas_validas(fecha_entrada: date, fecha_salida: date) -> bool:
+    hoy = date.today()
+    if fecha_entrada < hoy:
+        print(f"Fecha de entrada {fecha_entrada} es anterior a hoy {hoy}.")
+        return False
+    if fecha_salida <= fecha_entrada:
+        print(f"Fecha de salida {fecha_salida} debe ser posterior a la entrada {fecha_entrada}.")
+        return False
+    return True
 
-async def check_no_results(
-    crawler: AsyncWebCrawler,
-    url: str,
-    session_id: str,
-) -> bool:
-    """
-    Checks if the "No Results Found" message is present on the page.
+async def procesar_resultado_scraping(result):
+    if not (result.success and result.extracted_content):
+        print(f"Error en la obtención: {result.error_message}")
+        return None
 
-    Args:
-        crawler (AsyncWebCrawler): The web crawler instance.
-        url (str): The URL to check.
-        session_id (str): The session identifier.
+    hotel_data = json.loads(result.extracted_content)
 
-    Returns:
-        bool: True if "No Results Found" message is found, False otherwise.
-    """
-    # Fetch the page without any CSS selector or extraction strategy
-    result = await crawler.arun(
-        url=url,
-        config=CrawlerRunConfig(
-            cache_mode=CacheMode.BYPASS,
-            session_id=session_id,
-        ),
-    )
+    # Verifico si LLM devolvió habitaciones
+    if not hotel_data.get("habitacion"):
+        print(" No se encontraron habitaciones disponibles según extracción LLM.")
+        # Complemento con chequeo en HTML crudo
+        if "no availability" in result.cleaned_html.lower() or "no rooms available" in result.cleaned_html.lower():
+            print("Confirmado: no hay disponibilidad según contenido HTML.")
+        else:
+            print("Atención: no hay habitaciones extraídas, pero no se detectó mensaje explícito de no disponibilidad en HTML.")
+        return None
 
-    if result.success:
-        if "No Results Found" in result.cleaned_html:
-            return True
-    else:
-        print(
-            f"Error fetching page for 'No Results Found' check: {result.error_message}"
-        )
+    # Si hay habitaciones, devolver objeto Hotel o procesar más
+    return Hotel(**hotel_data)
 
-    return False
 
 
 async def fetch_and_process_page(
     crawler: AsyncWebCrawler,
-    page_number: int,
     base_url: str,
+    params: dict,
     css_selector: str,
     llm_strategy: LLMExtractionStrategy,
     session_id: str,
-    required_keys: List[str],
-    seen_names: Set[str],
-) -> Tuple[List[dict], bool]:
-    """
-    Fetches and processes a single page of venue data.
+    nombre_hotel: str = "Alvear Palace Hotel"
+) -> Optional[Hotel]:
+    
+    url_completa = f"{base_url}?{urlencode(params)}"
+    print(f"Loading hotel page: {url_completa}...")
 
-    Args:
-        crawler (AsyncWebCrawler): The web crawler instance.
-        page_number (int): The page number to fetch.
-        base_url (str): The base URL of the website.
-        css_selector (str): The CSS selector to target the content.
-        llm_strategy (LLMExtractionStrategy): The LLM extraction strategy.
-        session_id (str): The session identifier.
-        required_keys (List[str]): List of required keys in the venue data.
-        seen_names (Set[str]): Set of venue names that have already been seen.
-
-    Returns:
-        Tuple[List[dict], bool]:
-            - List[dict]: A list of processed venues from the page.
-            - bool: A flag indicating if the "No Results Found" message was encountered.
-    """
-    url = f"{base_url}?page={page_number}"
-    print(f"Loading page {page_number}...")
-
-    # Check if "No Results Found" message is present
-    no_results = await check_no_results(crawler, url, session_id)
-    if no_results:
-        return [], True  # No more results, signal to stop crawling
-
-    # Fetch page content with the extraction strategy
+    #ejecuta el crawl
     result = await crawler.arun(
-        url=url,
+        url=url_completa,
         config=CrawlerRunConfig(
-            cache_mode=CacheMode.BYPASS,  # Do not use cached data
-            extraction_strategy=llm_strategy,  # Strategy for data extraction
-            css_selector=css_selector,  # Target specific content on the page
-            session_id=session_id,  # Unique session ID for the crawl
+            cache_mode=CacheMode.BYPASS,
+            extraction_strategy=llm_strategy,
+            css_selector=css_selector,
+            session_id=session_id,
         ),
     )
-
+ 
     if not (result.success and result.extracted_content):
-        print(f"Error fetching page {page_number}: {result.error_message}")
-        return [], False
+        print(f"Error fetching hotel page: {result.error_message}")
+        return None
 
-    # Parse extracted content
-    extracted_data = json.loads(result.extracted_content)
-    if not extracted_data:
-        print(f"No venues found on page {page_number}.")
-        return [], False
+##aca tendriamos que chequear validez de datos
 
-    # After parsing extracted content
-    print("Extracted data:", extracted_data)
+    try:
+        
+        habitaciones_data = json.loads(result.extracted_content)
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON: {e}")
+        return None
 
-    # Process venues
-    complete_venues = []
-    for venue in extracted_data:
-        # Debugging: Print each venue to understand its structure
-        print("Processing venue:", venue)
+    if not habitaciones_data:
+        print("No se encontraron habitaciones.")
+        return None
 
-        # Ignore the 'error' key if it's False
-        if venue.get("error") is False:
-            venue.pop("error", None)  # Remove the 'error' key if it's False
+    ### Si hubo habitaciones
+    print(f"Se extrajeron {len(habitaciones_data)} habitaciones.")
+    
+    habitaciones = []
+    for h in habitaciones_data:
+        try:
+            habitacion = Habitacion(**h)
+            habitaciones.append(habitacion)
+        except Exception as e:
+            print(f"Error procesando una habitación: {e}")
+            continue
+    
+    hotel = Hotel(
+        detalles=nombre_hotel,
+        habitacion=habitaciones
+    )
+    imprimir_hotel(hotel)
 
-        if not is_complete_venue(venue, required_keys):
-            continue  # Skip incomplete venues
+    return hotel
 
-        if is_duplicate_venue(venue["name"], seen_names):
-            print(f"Duplicate venue '{venue['name']}' found. Skipping.")
-            continue  # Skip duplicate venues
+def imprimir_hotel(hotel: Hotel):
+    print(f"\n🏨 Hotel: {hotel.detalles}")
+    print("=" * (8 + len(hotel.detalles)))
 
-        # Add venue to the list
-        seen_names.add(venue["name"])
-        complete_venues.append(venue)
-
-    if not complete_venues:
-        print(f"No complete venues found on page {page_number}.")
-        return [], False
-
-    print(f"Extracted {len(complete_venues)} venues from page {page_number}.")
-    return complete_venues, False  # Continue crawling
+    for i, habitacion in enumerate(hotel.habitacion, start=1):
+        print(f"\n🛏️ Habitación {i}: {habitacion.nombre}")
+        if habitacion.detalles:
+            print(f"   📋 Detalles: {habitacion.detalles}")
+        
+        if habitacion.combos:
+            print("   💼 Promociones:")
+            for combo in habitacion.combos:
+                print(f"     🔹 {combo.titulo}")
+                print(f"        📃 {combo.descripcion}")
+                print(f"        💵 ${combo.precio:.2f}")
+        else:
+            print("   ❌ Sin promociones registradas.")
