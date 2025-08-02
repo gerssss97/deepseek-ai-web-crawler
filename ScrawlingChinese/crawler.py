@@ -1,12 +1,10 @@
 import asyncio
 from crawl4ai import AsyncWebCrawler
 from dotenv import load_dotenv
+from .config import BASE_URL, CSS_SELECTOR
+from models.hotel import *
 
-from config import BASE_URL, CSS_SELECTOR, REQUIRED_KEYS
-# from utils.data_utils import (
-#     save_venues_to_csv,
-# )
-from utils.scraper_utils import (
+from .utils.scraper_utils import (
     fetch_and_process_page,
     get_browser_config,
     get_llm_strategy,
@@ -15,7 +13,7 @@ from utils.scraper_utils import (
 load_dotenv()
 
 
-async def crawl_venues():
+async def crawl_venues(fecha_ingreso,fecha_egreso,adultos,niños) -> Optional[Hotel] :
     """
     Main function to crawl venue data from the website.
     """
@@ -26,10 +24,10 @@ async def crawl_venues():
 
     # Initialize state variables
     params_busqueda = {
-        "adult": 2,
-        "child": 0,
-        "arrive": "2025-07-12",
-        "depart": "2025-07-13",
+        "adult": adultos,
+        "child": niños,
+        "arrive": fecha_ingreso,
+        "depart": fecha_egreso,
         "chain": 24447,
         "hotel": 6933,
         "currency": "USD",
@@ -53,18 +51,19 @@ async def crawl_venues():
             llm_strategy,
             session_id,
         )
+        
+    return hotel
 
 
     # Display usage statistics for the LLM strategy
-    llm_strategy.show_usage()
+    #llm_strategy.show_usage()
 
 
-async def main():
+async def crawl_alvear(fecha_ingreso,fecha_egreso,adultos,niños) -> Optional[Hotel] :
     """
     Entry point of the script.
     """
-    await crawl_venues()
+    return await crawl_venues(fecha_ingreso,fecha_egreso,adultos,niños)
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+

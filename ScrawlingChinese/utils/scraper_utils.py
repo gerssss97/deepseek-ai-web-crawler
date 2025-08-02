@@ -25,7 +25,7 @@ def get_browser_config() -> BrowserConfig:
     # https://docs.crawl4ai.com/core/browser-crawler-config/
     return BrowserConfig(
         browser_type="chromium",  # Type of browser to simulate
-        headless=False,  # Whether to run in headless mode (no GUI)
+        headless=True,  # Whether to run in headless mode (no GUI)
         verbose=True,  # Enable verbose logging
     )
 
@@ -142,7 +142,7 @@ async def fetch_and_process_page(
         detalles=nombre_hotel,
         habitacion=habitaciones
     )
-    imprimir_hotel(hotel)
+    #imprimir_hotel(hotel)
 
     return hotel
 
@@ -156,7 +156,7 @@ def imprimir_hotel(hotel: Hotel):
             print(f"   📋 Detalles: {habitacion.detalles}")
         
         if habitacion.combos:
-            print("   💼 Promociones:")
+            print("   💼 Combos:")
             for combo in habitacion.combos:
                 print(f"     🔹 {combo.titulo}")
                 print(f"        📃 {combo.descripcion}")

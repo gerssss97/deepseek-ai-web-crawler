@@ -8,14 +8,24 @@ class InterfazApp:
             return re.fullmatch(r"[\d\-]{0,10}", valor) is not None
 
     def validar_fecha(self):
-        fecha = self.fecha_entrada.get()
-        try:
-            datetime.strptime(fecha, "%d-%m-%Y")
-            return True
-            #messagebox.showinfo("Fecha válida", "La fecha tiene el formato correcto.")
-        except ValueError:
-            messagebox.showerror("Error", "La fecha debe tener el formato DD-MM-AAAA y ser válida.")
+        campos = [("entrada", self.fecha_entrada.get()), ("salida", self.fecha_salida.get())]
+        for nombre, fecha in campos:
+            try:
+                datetime.strptime(fecha, "%d-%m-%Y")
+            except ValueError:
+                messagebox.showerror("Error", f"La fecha de {nombre} debe tener el formato DD-MM-AAAA y ser válida.")
+                return False
+        return True
+    
+    def validar_orden_fechas(self):
+        fecha_entrada = datetime.strptime(self.fecha_entrada.get(), "%d-%m-%Y")
+        fecha_salida = datetime.strptime(self.fecha_salida.get(), "%d-%m-%Y")
+
+        if fecha_salida <= fecha_entrada:
+            messagebox.showerror("Error", "La fecha de salida debe ser posterior a la fecha de entrada.")
+            print("false")
             return False
+        return True
             
 
 
@@ -35,6 +45,8 @@ class InterfazApp:
         self.fecha_salida = tk.StringVar()
         self.adultos = tk.IntVar()
         self.niños = tk.IntVar()
+        self.habitacion = tk.StringVar()
+        self.combo= tk.StringVar()
 
         vcmd = (root.register(self.validar_caracter), '%P')
 
@@ -45,28 +57,42 @@ class InterfazApp:
        
 
         ttk.Label(root, text="Fecha de salida (DD-MM-AAAA):").grid(row=1, column=0, sticky='w')
-        ttk.Entry(root, textvariable=self.fecha_salida).grid(row=1, column=1, sticky='ew')
+        ttk.Entry(root, textvariable=self.fecha_salida, validate='key', validatecommand=vcmd).grid(row=1, column=1, sticky='ew')
+        ttk.Button(root, text="Validar orden fecha", command=self.validar_orden_fechas).grid(row=0, column=2, sticky='e')
 
         ttk.Label(root, text="Cantidad de adultos:").grid(row=2, column=0, sticky='w')
         ttk.Entry(root, textvariable=self.adultos).grid(row=2, column=1, sticky='ew')
 
         ttk.Label(root, text="Cantidad de niños:").grid(row=3, column=0, sticky='w')
         ttk.Entry(root, textvariable=self.niños).grid(row=3, column=1, sticky='ew')
+        
+        ttk.Label(root, text="Seleccione la habitacion del hotel").grid(row=3, column=0, sticky='w')
+        ttk.Entry(root, textvariable=self.habitacion).grid(row=3, column=1, sticky='ew')
+        
+        ttk.Label(root, text="Seleccione el combo").grid(row=3, column=0, sticky='w')
+        ttk.Entry(root, textvariable=self.combo).grid(row=3, column=1, sticky='ew')
 
         ttk.Button(root, text="Ejecutar comparación", command=self.ejecutar).grid(row=4, column=0, columnspan=2, sticky='ew')
 
         # Área de resultados (expansible)
         self.resultado = tk.Text(root, height=15, width=80)
         self.resultado.grid(row=5, column=0, columnspan=2, sticky='nsew')
+    
     def ejecutar(self):
         if not self.validar_fecha():
-                return
-        # Acá luego llamarás a tu crawler y a la comparación
+            return
+        
+        if not self.validar_orden_fechas():
+            return
+    
+    
         datos = (
             self.fecha_entrada.get(),
             self.fecha_salida.get(),
             self.adultos.get(),
-            self.niños.get()
+            self.niños.get(),
+            self.combo.get(),
+            self.habitacion.get()
         )
         self.resultado.insert(tk.END, f"Ejecutando scraping con: {datos}\n")
         # Acá llamás a tu lógica real luego
