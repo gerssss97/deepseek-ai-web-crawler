@@ -10,11 +10,12 @@ class GestorDatos:
     
     def __init__(self,path_excel):
         self.path = path_excel
-        self.tipos_habitacion_excel= obtener_tipos_habitacion(self.path)
-        self.habitaciones_excel = obtener_habitaciones_excel(self.path)
-        self.precios_excel= obtener_precios_excel(self.path) 
+        self.datos_excel = cargar_excel(self.path) 
+        # self.tipos_habitacion_excel= obtener_tipos_habitacion(self.path) DE MOMENTO NO SE USA
+        self.habitaciones_excel= self.datos_excel.habitaciones
+        #[HabitacionExcel.nombre for HabitacionExcel in self.datos_excel.habitaciones]
         self.hotel : Optional[Hotel] = None
-        self.hab_web = None
+        self.hab_web : Optional[Habitacion] = None
         self.combo_elegido = self.habitaciones_excel[2]
         self.precio_combo_elegido= self.habitaciones_excel[4]
 
@@ -69,7 +70,8 @@ class GestorDatos:
 
     def comparar_precio(self):
         pass
-
+    
+    
 
 
 
