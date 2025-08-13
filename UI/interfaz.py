@@ -2,12 +2,14 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
 import re
+import threading
 
 from models.hotel import *
 from Core.controller import *
 
 
 class InterfazApp:
+    ##valida que sean de cero a dies digitos, solo separados por guiones
     def validar_caracter(self, valor):
             return re.fullmatch(r"[\d\-]{0,10}", valor) is not None
 
@@ -37,89 +39,142 @@ class InterfazApp:
         self.root = root
         self.root.title("Comparador de precios - Alvear Hotel")
 
-        # Permite que las columnas se expandan
-        root.grid_columnconfigure(0, weight=1)
-        root.grid_columnconfigure(1, weight=2)
-
-        # Permite que la fila de resultados se expanda
-        root.grid_rowconfigure(5, weight=1)
-
         # Campos de entrada
         self.seleccion_hotel = tk.StringVar()
         self.seleccion_habitacion_excel = tk.StringVar()
         self.fecha_entrada = tk.StringVar()
         self.fecha_salida = tk.StringVar()
-        self.adultos = tk.IntVar()
+        self.adultos = tk.IntVar(value=1)
         self.niños = tk.IntVar()
-        self.habitacion = tk.StringVar()
-        self.combo= tk.StringVar()
+        self.precio_var = tk.StringVar(value="(ninguna seleccionada)")
 
         vcmd = (root.register(self.validar_caracter), '%P')
-
-        ttk.Label(root, text="Selección hotel:").grid(row=0, column=0, sticky='w', padx=4, pady=2)
-        hotel_cb = ttk.Combobox(
-            root,
+        self.vcmd = vcmd
+        
+        # FRAME Encabezado
+        self.encabezado_frame = ttk.Frame(self.root)
+        self.encabezado_frame.columnconfigure(1, weight=2, uniform='col')
+        self.encabezado_frame.columnconfigure(0, weight=1, uniform='col')
+        
+        self.encabezado_frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        ttk.Label(self.encabezado_frame, text="Selección hotel: ").grid(row=0, column=0, sticky='w', padx=4, pady=2)
+        self.hotel_cb = ttk.Combobox(
+            self.encabezado_frame,
             textvariable=self.seleccion_hotel,
             values=["Hotel A", "Hotel B"],
-            state="readonly"
+            state="readonly",
         )
-        hotel_cb.current(0)
-        hotel_cb.grid(row=0, column=1, sticky='ew', padx=4, pady=2)
+        self.hotel_cb.grid(row=0, column=1, sticky='ew', padx=4, pady=2)
+        self.hotel_cb.bind("<<ComboboxSelected>>", self.on_hotel_cambiado)
+        self.crear_campos_estaticos(1)
+        
+        # FRAME precio de la habitación (col 2)
+        self.precio_frame = ttk.Frame(self.root)
+        self.precio_frame.grid(row=0, column=2, rowspan=3, sticky='nsew', padx=4, pady=2)
 
-        # --- FILA 1: Selección de habitación Excel ---
-        ttk.Label(root, text="Selección habitación Excel:").grid(row=1, column=0, sticky='w', padx=4, pady=2)
-        self.habit_excel_cb = ttk.Combobox(
-            root,
-            textvariable=self.seleccion_habitacion_excel,
-            state="readonly"
-        )
-        self.habit_excel_cb.grid(row=1, column=1, sticky='ew', padx=4, pady=2)
-        self.habit_excel_cb.bind("<<ComboboxSelected>>", self.on_habitacion_excel_cambiada)
+        ttk.Label(self.precio_frame, text="Precio de la habitación").grid(row=0, column=0, sticky='w', pady=(0,2))
+        self.label_precio = ttk.Label(self.precio_frame, textvariable=self.precio_var)
+        self.label_precio.grid(row=1, column=0, sticky='w')
+        
         self.cargar_habitaciones_excel()
+        
+        # Permite que las columnas se expandan
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(1, weight=3)
+        self.root.grid_columnconfigure(2, weight=1)
+    
+    def mostrar_email_btn(self):
+        self.boton_ejecutar = ttk.Button(self.precio_frame, text="Envio de email")
+        self.boton_ejecutar.grid(row=2, column=0, sticky="ew")
+        pass
+    
+    def crear_campos_estaticos(self, desde=1, incluir_edificio=False):
+        
+        # Si el frame ya existe, lo destruimos para recrearlo
+        if hasattr(self, 'campos_frame'):
+            # self.campos_frame.destroy()
+            self.campos_frame.pack_forget()
 
-        ttk.Label(root, text="Precio de la habitación").grid(row=0, column=2, sticky='w', padx=4, pady=2)
-        self.precio_var = tk.StringVar(value="(ninguna seleccionada)")
-        self.label_precio = ttk.Label(root, textvariable=self.precio_var)
-        self.label_precio.grid(row=1, column=2, sticky='w', padx=4, pady=2)
+        self.campos_frame = ttk.Frame(self.root)
+        self.campos_frame.columnconfigure(1,weight=2, uniform='col')
+        self.campos_frame.columnconfigure(0,weight=1, uniform='col')
+               
+        self.campos_frame.grid(row=desde, column=0, columnspan=2, sticky="nsew")
 
-        # --- FILA 2: Fecha de entrada ---
-        ttk.Label(root, text="Fecha de entrada (DD-MM-AAAA):").grid(row=2, column=0, sticky='w', padx=4, pady=2)
-        ttk.Entry(root, textvariable=self.fecha_entrada, validate='key', validatecommand=vcmd).grid(row=2, column=1, sticky='ew', padx=4, pady=2)
+        i = 0  # fila relativa dentro del frame
 
-        # --- FILA 3: Fecha de salida ---
-        ttk.Label(root, text="Fecha de salida (DD-MM-AAAA):").grid(row=3, column=0, sticky='w', padx=4, pady=2)
-        ttk.Entry(root, textvariable=self.fecha_salida, validate='key', validatecommand=vcmd).grid(row=3, column=1, sticky='ew', padx=4, pady=2)
+        # Campo opcional: Edificio
+        if incluir_edificio:
+            self.label_edificio = ttk.Label(self.campos_frame, text="Edificio:")
+            self.var_edificio = tk.StringVar()
+            self.entry_edificio = ttk.Entry(self.campos_frame, textvariable=self.var_edificio)
 
-        # --- FILA 4: Adultos ---
-        ttk.Label(root, text="Cantidad de adultos:").grid(row=4, column=0, sticky='w', padx=4, pady=2)
-        ttk.Entry(root, textvariable=self.adultos).grid(row=4, column=1, sticky='ew', padx=4, pady=2)
+            self.label_edificio.grid(row=i, column=0, sticky='w', padx=4, pady=2)
+            self.entry_edificio.grid(row=i, column=1, sticky='ew', padx=4, pady=2)
+            i += 1
 
-        # --- FILA 5: Niños ---
-        ttk.Label(root, text="Cantidad de niños:").grid(row=5, column=0, sticky='w', padx=4, pady=2)
-        ttk.Entry(root, textvariable=self.niños).grid(row=5, column=1, sticky='ew', padx=4, pady=2)
+        # Selección habitación Excel
+        self.label_habit_excel = ttk.Label(self.campos_frame, text="Selección habitación Excel:")
+        self.habit_excel_cb = ttk.Combobox(self.campos_frame, textvariable=self.seleccion_habitacion_excel, state="readonly")
+        self.habit_excel_cb.bind("<<ComboboxSelected>>", self.on_habitacion_excel_cambiada)
+        self.label_habit_excel.grid(row=i, column=0, sticky='w', padx=4, pady=2)
+        self.habit_excel_cb.grid(row=i, column=1, sticky='ew', padx=4, pady=2)
+        i += 1
 
+        # Fecha entrada
+        self.label_fecha_entrada = ttk.Label(self.campos_frame, text="Fecha de entrada (DD-MM-AAAA):")
+        self.entry_fecha_entrada = ttk.Entry(self.campos_frame, textvariable=self.fecha_entrada, validate='key', validatecommand=self.vcmd)
+        self.label_fecha_entrada.grid(row=i, column=0, sticky='w', padx=4, pady=2)
+        self.entry_fecha_entrada.grid(row=i, column=1, sticky='ew', padx=4, pady=2)
+        i += 1
 
-        # --- BOTÓN de ejecución ---
-        ttk.Button(root, text="Ejecutar comparación", command=self.ejecutar).grid(
-            row=8, column=0, columnspan=2, sticky='ew', padx=4, pady=6
-        )
+        # Fecha salida
+        self.label_fecha_salida = ttk.Label(self.campos_frame, text="Fecha de salida (DD-MM-AAAA):")
+        self.entry_fecha_salida = ttk.Entry(self.campos_frame, textvariable=self.fecha_salida, validate='key', validatecommand=self.vcmd)
+        self.label_fecha_salida.grid(row=i, column=0, sticky='w', padx=4, pady=2)
+        self.entry_fecha_salida.grid(row=i, column=1, sticky='ew', padx=4, pady=2)
+        i += 1
 
-        # Área de resultados (expansible)
-        self.resultado = tk.Text(root, height=15, width=80)
-        self.resultado.grid(row=9, column=0, columnspan=2, sticky='nsew', padx=4, pady=2)
+        # Adultos
+        self.label_adultos = ttk.Label(self.campos_frame, text="Cantidad de adultos:")
+        self.entry_adultos = ttk.Entry(self.campos_frame, textvariable=self.adultos)
+        self.label_adultos.grid(row=i, column=0, sticky='w', padx=4, pady=2)
+        self.entry_adultos.grid(row=i, column=1, sticky='ew', padx=4, pady=2)
+        i += 1
 
-        # Hacer que la columna 1 se expanda por 3
-        root.columnconfigure(1, weight=3)
-        root.rowconfigure(9, weight=1)
+        # Niños
+        self.label_niños = ttk.Label(self.campos_frame, text="Cantidad de niños:")
+        self.entry_niños = ttk.Entry(self.campos_frame, textvariable=self.niños)
+        self.label_niños.grid(row=i, column=0, sticky='w', padx=4, pady=2)
+        self.entry_niños.grid(row=i, column=1, sticky='ew', padx=4, pady=2)
+        i += 1
+
+        # Botón ejecutar comparacion
+        self.boton_ejecutar = ttk.Button(self.campos_frame, text="Ejecutar comparación", command=self.ejecutar_comparacion_wrapper)
+        self.boton_ejecutar.grid(row=i, column=0, columnspan=2, sticky='ew', padx=4, pady=6)
+        i += 1
+
+        # Resultado
+        self.resultado = tk.Text(self.campos_frame, height=15, width=80)
+        self.resultado.grid(row=i, column=0, columnspan=2, sticky='nsew', padx=4, pady=2)
+
+        # self.campos_frame.rowconfigure(i, weight=1)
+    
+    
+    def on_hotel_cambiado(self, event):
+        hotel = self.seleccion_hotel.get()
+        if hotel == "Hotel A":
+            self.crear_campos_estaticos(desde=1, incluir_edificio=True)
+        else:
+            self.crear_campos_estaticos(desde=1, incluir_edificio=False)
+
+        self.cargar_habitaciones_excel()
+    
 
     def cargar_habitaciones_excel(self):
-        # accede a lo que ya tiene el gestor
         self.habitaciones_excel = dar_habitaciones_excel()
-        #self.mapa_por_nombre = {h.nombre: h for h in self.habitaciones_excel}
-        #self.habit_excel_cb['values'] = list(self.mapa_por_nombre.keys())
         self.habit_excel_cb['values'] = [HabitacionExcel.nombre for HabitacionExcel in self.habitaciones_excel]
         if self.habitaciones_excel:
-            self.habit_excel_cb.current(0)
             self.on_habitacion_excel_cambiada(None)
 
     def on_habitacion_excel_cambiada(self, event):
@@ -127,44 +182,58 @@ class InterfazApp:
         try:
             idx = self.habit_excel_cb['values'].index(seleccionado)
             habitacion = self.habitaciones_excel[idx]
-            print()
+            self.precio_var.set(f"${habitacion.precio:.2f}")
             print(habitacion.row_idx, habitacion.precio)
         except ValueError:
             # no encontrado
             pass
-       
-        # seleccionado = self.seleccion_habitacion_excel.get()
-        # # Buscamos el objeto correspondiente (primer match)
-        # match = next((h for h in self.habit_excel_cb if h == seleccionado), None)
-        # if match:
-        #     for self.habitaciones.excel.nombre in self.habitaciones_excel
-        #     precio = match.precio
-        #     # Formateo simple
-        #     self.precio_var.set(f"${precio:,.2f}")
-        # else:
-        #     self.precio_var.set("No disponible")
 
-            
-    def ejecutar(self):
-        if not self.validar_fecha():
-            return
+    
+
+ 
+    def ejecutar_comparacion_wrapper(self):
+        threading.Thread(target=self.run_async, daemon= True).start()
+        pass
+    
+    def run_async(self):
+        asyncio.run(self.ejecutar_comparacion())
         
-        if not self.validar_orden_fechas():
-            return
+    async def ejecutar_comparacion(self):
+        # if not self.validar_fecha():
+        #     return
+        
+        # if not self.validar_orden_fechas():
+        #     return
     
-    
-        datos = (
-            self.fecha_entrada.get(),
-            self.fecha_salida.get(),
-            self.adultos.get(),
-            self.niños.get(),
-            self.combo.get(),
-            self.habitacion.get()
-        )
-        self.resultado.insert(tk.END, f"Ejecutando scraping con: {datos}\n")
-        # Acá llamás a tu lógica real luego
+        # datos = (
+        #     self.fecha_entrada.get(), 
+        #     self.fecha_salida.get(),
+        #     self.adultos.get(),
+        #     self.niños.get(),
+        #     self.seleccion_habitacion_excel.get(),
+        #     self.precio_var.get()
+        # )
+        # self.resultado.insert(tk.END, f"Ejecutando scraping con: {datos}\n")
+        
+        habitacion_web = await dar_habitacion_web(self.fecha_entrada.get(),self.fecha_salida.get(),self.adultos.get(),self.niños.get())
+        imprimir_hotel(habitacion_web)
+        # coincide = comparar_habitaciones(self.seleccion_habitacion_excel.get(),self.precio_var.get())
+        
+        
+        
+        if True: ##cambiar por condicion de supearcion del valor
+            self.mostrar_email_btn()
+   
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = InterfazApp(root)
     root.mainloop()
+
+
+
+
+        #PARA VER EN DISTINTOS COLORES 
+        # for col in range(2):
+        #     color = 'lightblue' if col == 0 else 'lightgreen'
+        #     ttk.Label(self.campos_frame, text=f'Col {col}', background=color).grid(row=0, column=col, sticky='nsew')

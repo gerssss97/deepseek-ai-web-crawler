@@ -24,7 +24,37 @@ class ParametrosBusqueda(BaseModel):
     adultos: int
     ninos: int
 
+def imprimir_hotel(hotel):
+    print(f"\n🏨 Hotel: {hotel.detalles}")
+    print("=" * (8 + len(hotel.detalles)))
 
+    for i, habitacion in enumerate(hotel.habitacion, start=1):
+        print(f"\n🛏️ Habitación {i}: {habitacion.nombre}")
+        if habitacion.detalles:
+            print(f"   📋 Detalles: {habitacion.detalles}")
+        
+        if habitacion.combos:
+            print("   💼 Combos:")
+            for combo in habitacion.combos:
+                print(f"     🔹 {combo.titulo}")
+                print(f"        📃 {combo.descripcion}")
+                print(f"        💵 ${combo.precio:.2f}")
+        else:
+            print("   ❌ Sin promociones registradas.")   
+            
+def imprimir_habitacion(habitacion):
+    print(f"\n🛏️ Habitación COINCIDENTE: {habitacion.nombre}")
+    if habitacion.detalles:
+        print(f"   📋 Detalles: {habitacion.detalles}")
+    
+    if habitacion.combos:
+        print("   💼 Combos:")
+        for combo in habitacion.combos:
+            print(f"     🔹 {combo.titulo}")
+            print(f"        📃 {combo.descripcion}")
+            print(f"        💵 ${combo.precio:.2f}")
+    else:
+        print("   ❌ Sin promociones registradas.")   
 
 #######################################################
 
