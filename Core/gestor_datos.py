@@ -7,66 +7,72 @@ import os
 
 class GestorDatos:
     def __init__(self,path_excel):
-        self.path = path_excel
-        self.datos_excel = cargar_excel(self.path) 
-        # self.tipos_habitacion_excel = obtener_tipos_habitacion(self.path) DE MOMENTO NO SE USA
-        self.habitaciones_excel = self.datos_excel.habitaciones
-        #[HabitacionExcel.nombre for HabitacionExcel in self.datos_excel.habitaciones]
-        self.hotel_web : Optional[Hotel] = None
-        self.habitaciones_web : Optional[List[Habitacion]] = None
-        self.combo_elegido = self.habitaciones_excel[0].nombre #hardcodeado
-        self.precio_combo_elegido = self.habitaciones_excel[0].precio #hardcodeado
+        self.__path = path_excel
+        self.__datos_excel = cargar_excel(self.__path) 
+        # self.tipos_habitacion_excel = obtener_tipos_habitacion(self.__path) DE MOMENTO NO SE USAo
+        self.__habitaciones_excel = self.__datos_excel.habitaciones
+        #[HabitacionExcel.nombre for HabitacionExcel in self.__datos_excel.habitaciones]
+        self.__hotel_web : Optional[Hotel] = None
+        self.__habitaciones_web : Optional[List[Habitacion]] = None
+        self.__combo_elegido = self.__habitaciones_excel[0].nombre #hardcodeado
+        self.__precio_combo_elegido = self.__habitaciones_excel[0].precio #hardcodeado
         self.mejor_habitacion_web : Habitacion | None
     
-    @property
-    def mejor_habitacion_web_get(self)-> Habitacion | None:
-        return self.mejor_habitacion_web
-    
-    def mostrar_tipos_habitacion_excel(self):
-        try:
-            suites = obtener_tipos_habitacion(self.path)
-            print("Tipos de habitaciones encontradas:")
-            for suite in suites:
-                print(f" - {suite}")
-        except Exception as e:
-            print(f"[ERROR] No se pudieron obtener los tipos de habitaciones: {e}")
-            
-    def mostrar_habitaciones_excel(self):
-        try:
-            habitaciones = obtener_habitaciones_excel(self.path)
-            print("Habitaciones encontradas:")
-            for hab in habitaciones:
-                print(f" - {hab}")
-         
-        except Exception as e:
-            print(f"[ERROR] No se pudieron obtener las habitaciones : {e}")
-    
     def coincidir_excel_web (self):
-        self.mejor_habitacion_web = obtener_mejor_match_con_breakfast(self.combo_elegido, self.habitaciones_web)
-        # imprimir_habitacion(mejor_habitacion_web)
-        # print("COMBO ELEGIDO",self.combo_elegido)
+        self.mejor_habitacion_web = obtener_mejor_match_con_breakfast(self.__combo_elegido, self.__habitaciones_web)
+        if self.mejor_habitacion_web is None:
+            raise ValueError(f"[ERROR] No se encontró una coincidencia para el combo: {self.__combo_elegido}")
         return 
 
     async def obtener_hotel_web(self, fecha_ingreso,fecha_egreso,adultos,niños):
         if os.path.exists("hotel_guardado.pkl"):
             with open("hotel_guardado.pkl", "rb") as f:
-                self.hotel_web = pickle.load(f)
-                # imprimir_hotel(self.hotel_web)
-                self.obtener_nombres_hab_web()
+                self.__hotel_web = pickle.load(f)
+                # imprimir_hotel(self.__hotel_web)
+                self.__habitaciones_web = self.__hotel_web.habitacion
         else:
-            self.hotel_web = await crawl_alvear(fecha_ingreso, fecha_egreso, adultos, niños)  
+            self.__hotel_web = await crawl_alvear(fecha_ingreso, fecha_egreso, adultos, niños)  
             with open("hotel_guardado.pkl", "wb") as f:
-                pickle.dump(self.hotel_web, f)
-                # imprimir_hotel(self.hotel_web)
-                self.obtener_nombres_hab_web()
-        return self.hotel_web
-         
-    def obtener_nombres_hab_web(self):
-        if self.hotel_web is None:
-            raise ValueError("El hotel aún no fue cargado. Llamá a crawl_alvear primero.")
-        self.habitaciones_web = self.hotel_web.habitacion
-        #print(self.hab_web)
-        return
+                pickle.dump(self.__hotel_web, f)
+                # imprimir_hotel(self.__hotel_web)
+                self.__habitaciones_web = self.__hotel_web.habitacion
+        return self.__hotel_web
+    
+    @property
+    def mejor_habitacion_web_get(self)-> Habitacion | None:
+        return self.mejor_habitacion_web
+    
+    @property
+    def tipos_habitaciones_excel_get(self,hotelExcel)-> List[str] | None:
+        for hotel in self.__datos_excel.hoteles:
+            if hotel.nombre == hotelExcel:
+                for tipos in hotel.tipos:
+                    return tipos.nombre
+            else:
+                return "no se encontro el hotel"
+    
+    @property
+    def habitaciones_excel_get(self,hotelExcel,tipo = None)-> List[HabitacionExcel] | None:
+        if tipo is None:
+            for hotel in self.__datos_excel.hoteles:
+                if hotel.nombre == hotelExcel:
+                    return hotel.habitaciones_directas
+                else:
+                    print("no se encontro el hotel")
+        else:
+            for hotel in self.__datos_excel.hoteles:
+                if hotel.nombre == hotelExcel:
+                    for tipos in hotel.tipos:
+                        if tipos.nombre == tipo:
+                            return tipos.habitaciones
+                else:
+                    print("no se encontro el tipo del hotel")
+        return None
+        
+    
+    @property
+    def precio_combo_elegido_get(self)-> float:
+        return self.__precio_combo_elegido
 
     
 
@@ -89,3 +95,8 @@ class GestorDatos:
 #         else:
 #             print("   ❌ Sin promociones registradas.")   
 
+
+## ORDEN
+# obtener hotel web 
+# coincidir excel web
+# luego comparar precios

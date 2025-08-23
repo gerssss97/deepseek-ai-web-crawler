@@ -66,6 +66,13 @@ def normalizar_precio_str(s: str) -> Optional[float]:
     except Exception:
         return None
 
+
+
+
+# class DatosExcel(BaseModel):
+#     tipos_habitacion_excel: List[str]
+#     habitaciones: List[HabitacionExcel]
+
 class HabitacionExcel(BaseModel):
     nombre: str
     precio_raw: Optional[str] = None
@@ -96,6 +103,16 @@ class HabitacionExcel(BaseModel):
             return None
         return normalizar_precio_str(raw)
 
+class TipoHabitacionExcel(BaseModel):
+    nombre: str
+    habitaciones: list[HabitacionExcel] = []
+
+
+class HotelExcel(BaseModel):
+    nombre: str
+    tipos: list[TipoHabitacionExcel] = []
+    habitaciones_directas: list[HabitacionExcel] = []  
+
+
 class DatosExcel(BaseModel):
-    tipos_habitacion_excel: List[str]
-    habitaciones: List[HabitacionExcel]
+    hoteles: list[HotelExcel]
