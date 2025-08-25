@@ -10,16 +10,16 @@ class GestorDatos:
         self.__path = path_excel
         self.__datos_excel = cargar_excel(self.__path) 
         # self.tipos_habitacion_excel = obtener_tipos_habitacion(self.__path) DE MOMENTO NO SE USAo
-        self.__habitaciones_excel = self.__datos_excel.habitaciones
+        # self.__habitaciones_excel = self.__datos_excel.habitaciones
         #[HabitacionExcel.nombre for HabitacionExcel in self.__datos_excel.habitaciones]
         self.__hotel_web : Optional[Hotel] = None
         self.__habitaciones_web : Optional[List[Habitacion]] = None
-        self.__combo_elegido = self.__habitaciones_excel[0].nombre #hardcodeado
-        self.__precio_combo_elegido = self.__habitaciones_excel[0].precio #hardcodeado
+        # self.__combo_elegido = self.__habitaciones_excel[0].nombre #hardcodeado
+        # self.__precio_combo_elegido = self.__habitaciones_excel[0].precio #hardcodeado
         self.mejor_habitacion_web : Habitacion | None
     
-    def coincidir_excel_web (self):
-        self.mejor_habitacion_web = obtener_mejor_match_con_breakfast(self.__combo_elegido, self.__habitaciones_web)
+    def coincidir_excel_web (self, habitacion_excel):
+        self.mejor_habitacion_web = obtener_mejor_match_con_breakfast(habitacion_excel, self.__habitaciones_web)
         if self.mejor_habitacion_web is None:
             raise ValueError(f"[ERROR] No se encontró una coincidencia para el combo: {self.__combo_elegido}")
         return 
@@ -39,15 +39,14 @@ class GestorDatos:
         return self.__hotel_web
     
     @property
-    def mejor_habitacion_web_get(self)-> Habitacion | None:
-        return self.mejor_habitacion_web
+    def hoteles_excel_get(self)-> List[HotelExcel]:
+        return self.__datos_excel.hoteles
     
     @property
-    def tipos_habitaciones_excel_get(self,hotelExcel)-> List[str] | None:
+    def tipos_habitaciones_excel_get(self,hotelExcel)-> List[TipoHabitacionExcel] | None:
         for hotel in self.__datos_excel.hoteles:
             if hotel.nombre == hotelExcel:
-                for tipos in hotel.tipos:
-                    return tipos.nombre
+                return hotel.tipos
             else:
                 return "no se encontro el hotel"
     
@@ -70,11 +69,13 @@ class GestorDatos:
         return None
         
     
-    @property
-    def precio_combo_elegido_get(self)-> float:
-        return self.__precio_combo_elegido
+    # @property
+    # def precio_combo_elegido_get(self)-> float:
+    #     return self.__precio_combo_elegido
 
-    
+    @property
+    def mejor_habitacion_web_get(self)-> Habitacion | None:
+        return self.mejor_habitacion_web    
 
 ################## IMPRESIONES ###############
 # def imprimir_hotel(hotel):
