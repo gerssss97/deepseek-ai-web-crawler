@@ -41,6 +41,7 @@ class InterfazApp:
 
         # Campos de entrada
         self.seleccion_hotel = tk.StringVar()
+        self.seleccion_edificio = tk.StringVar()
         self.seleccion_habitacion_excel = tk.StringVar()
         self.fecha_entrada = tk.StringVar()
         self.fecha_salida = tk.StringVar()
@@ -76,7 +77,7 @@ class InterfazApp:
         self.label_precio = ttk.Label(self.precio_frame, textvariable=self.precio_var)
         self.label_precio.grid(row=1, column=0, sticky='w')
         
-        self.cargar_habitaciones_excel()
+        self.cargar_hoteles_excel()
         
         # Permite que las columnas se expandan
         self.root.grid_columnconfigure(0, weight=1)
@@ -106,11 +107,10 @@ class InterfazApp:
         # Campo opcional: Edificio
         if incluir_edificio:
             self.label_edificio = ttk.Label(self.campos_frame, text="Edificio:")
-            self.var_edificio = tk.StringVar()
-            self.entry_edificio = ttk.Entry(self.campos_frame, textvariable=self.var_edificio)
-
+            self.var_edificio_cb = ttk.Combobox(self.campos_frame, textvariable=self.seleccion_edificio, state="readonly")
+            self.var_edificio_cb.bind("<<ComboboxSelected>>", self.on_edificio_cambiado)
             self.label_edificio.grid(row=i, column=0, sticky='w', padx=4, pady=2)
-            self.entry_edificio.grid(row=i, column=1, sticky='ew', padx=4, pady=2)
+            self.var_edificio_cb.grid(row=i, column=1, sticky='ew', padx=4, pady=2)
             i += 1
 
         # Selección habitación Excel
@@ -162,18 +162,65 @@ class InterfazApp:
     
     
     def on_hotel_cambiado(self, event):
-        hotel = self.seleccion_hotel.get()
-        if hotel == "Hotel A":
-            self.crear_campos_estaticos(desde=1, incluir_edificio=True)
-        else:
-            self.crear_campos_estaticos(desde=1, incluir_edificio=False)
+        hotel = self.seleccion_hotel.get().lower()
+        hotel = hotel + " (a)"
+        print(f"Hotel cambiado a: {hotel}")
+        for hotel_excel in self.hoteles_excel:
+            if hotel_excel.nombre.lower() == hotel and hotel_excel.tipos:
+                self.crear_campos_estaticos(desde=1, incluir_edificio=True)
+                self.cargar_edificios_excel(hotel)
+            elif hotel_excel.nombre.lower() == hotel:
+                self.crear_campos_estaticos(desde=1, incluir_edificio=False)
+                self.cargar_habitaciones_excel(hotel)
+            else:
+                print("no se encontro el hotel")
 
-        self.cargar_habitaciones_excel()
+    def on_edificio_cambiado(self, event):
+        edificio = self.seleccion_edificio.get()
+        hotel = self.seleccion_hotel.get().lower()
+        hotel = hotel + " (a)"
+        self.cargar_habitaciones_excel(hotel, edificio)
     
+    def cargar_edificios_excel(self, hotel):
+        edificios = []
+        for hotel_excel in self.hoteles_excel:
+            if hotel_excel.nombre.lower() == hotel:
+                edificios = [tipo.nombre for tipo in hotel_excel.tipos]
+        self.var_edificio_cb['values'] = edificios
+        if edificios:
+            self.seleccion_edificio.set(edificios[0])
+        else:
+            self.seleccion_edificio.set("")
 
-    def cargar_habitaciones_excel(self):
-        self.habitaciones_excel = dar_habitaciones_excel()
+    def cargar_hoteles_excel(self):
+        self.hoteles_excel = dar_hoteles_excel()
+        hoteles = [hoteles_excel.nombre for hoteles_excel in self.hoteles_excel]
+        for i in range(len(hoteles)):
+            hoteles[i]= hoteles[i].replace("(A)","").strip()
+        self.hotel_cb['values'] = hoteles
+        if self.hoteles_excel:
+            self.seleccion_hotel.set(hoteles[0])
+            self.on_hotel_cambiado(None)
+        else:
+            self.seleccion_hotel.set("")
+
+    def cargar_habitaciones_excel(self, hotel, tipo=None):
+        print("cargar habitaciones excel")
+        print("hotel", hotel)
+        print("tipo", tipo)
+        if tipo is None:
+            for hotelExcel in self.hoteles_excel:
+                if hotelExcel.nombre.lower() == hotel:
+                    self.habitaciones_excel = hotelExcel.habitaciones_directas
+        else:
+            for hotelExcel in self.hoteles_excel:
+                if hotelExcel.nombre.lower() == hotel:
+                    for tipos in hotelExcel.tipos:
+                        if tipos.nombre == tipo:
+                            self.habitaciones_excel = tipos.habitaciones
+        print("habitaciones " , self.habitaciones_excel)
         self.habit_excel_cb['values'] = [HabitacionExcel.nombre for HabitacionExcel in self.habitaciones_excel]
+        self.seleccion_habitacion_excel.set("")
         if self.habitaciones_excel:
             self.on_habitacion_excel_cambiada(None)
 
@@ -187,9 +234,6 @@ class InterfazApp:
         except ValueError:
             # no encontrado
             pass
-
-    
-
  
     def ejecutar_comparacion_wrapper(self):
         threading.Thread(target=self.run_async, daemon= True).start()
@@ -215,14 +259,18 @@ class InterfazApp:
         # )
         # self.resultado.insert(tk.END, f"Ejecutando scraping con: {datos}\n")
         
-        habitacion_web = await dar_habitacion_web(self.fecha_entrada.get(),self.fecha_salida.get(),self.adultos.get(),self.niños.get())
-        imprimir_hotel(habitacion_web)
-        # coincide = comparar_habitaciones(self.seleccion_habitacion_excel.get(),self.precio_var.get())
+        hotel_web = await dar_habitacion_web(self.fecha_entrada.get(),self.fecha_salida.get(),self.adultos.get(),self.niños.get())
+        imprimir_hotel(hotel_web)
+
+        coincide = comparar_habitaciones(self.seleccion_habitacion_excel.get(),self.precio_var.get())
+        habitacion_web =  dar_habitacion_web()
         
         
-        
-        if True: ##cambiar por condicion de supearcion del valor
+        if not coincide: 
             self.mostrar_email_btn()
+        else:
+            self.resultado.insert(tk.END, "Las habitaciones coinciden en precio y nombre.\n")
+            self.resultado.insert(tk.END, f"Habitacion web: {habitacion_web.detalles}\n") ##cambiar por la impresion de habitacion web
    
 
 if __name__ == "__main__":
